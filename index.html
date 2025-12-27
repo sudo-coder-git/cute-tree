@@ -56,10 +56,20 @@
             pointer-events: none;
             text-transform: none;
             letter-spacing: 1px;
-            font-size: 12px;
+            font-size: 14px;
             text-align: center;
             max-width: 50%;
             line-height: 1.6;
+            opacity: 0;
+            transition: opacity 1s ease;
+        }
+
+        @media (max-width: 768px) {
+            #typewriter2 {
+                max-width: 80%;
+                left: 50%;
+                top: 45%;
+            }
         }
     </style>
 </head>
@@ -68,15 +78,21 @@
     <div id="instructions">Click to Drop</div>
     <div id="typewriter" class='type1'></div>
     <div id="typewriter2" class='type2'></div>
-    <audio id="bgMusic" loop>
-        <source src="your-song.m4a" type="audio/mpeg">
+    
+    <!-- Audio element -->
+    <audio id="bgMusic" loop preload="auto">
+        <source src="your-song.m4a" type="audio/mp4">
+        <source src="your-song.mp3" type="audio/mpeg">
     </audio>
+    
     <canvas id="canvas"></canvas>
 
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         const instructions = document.getElementById('instructions');
+        const bgMusic = document.getElementById('bgMusic');
+        
         let musicStarted = false;
         let width, height;
 
@@ -93,7 +109,7 @@
         const FRICTION = 0.99;
         const STOP_THRESHOLD = 0.5;
 
-        const MAX_BRANCH_LEVEL = 8;  // Reduced for better performance
+        const MAX_BRANCH_LEVEL = 8;
         const BRANCH_ANGLE_VAR = 28;
         const LENGTH_SCALE = 0.68;
 
@@ -117,35 +133,45 @@
             canvas.height = height;
 
             if (currentState === STATE.IDLE) {
-                ball.x = width / 2;
+                // Ball always starts in right half (50%-90% of width)
+                ball.x = width * 0.5 + Math.random() * (width * 0.4);
                 ball.y = height / 2;
             } else if (currentState === STATE.TRANSFORMING || currentState === STATE.GROWN) {
-                treeRootY = height / 2;
+                treeRootY = height;
             }
         }
 
         window.addEventListener('resize', resize);
         resize();
 
-        window.addEventListener('mousedown', startBouncing);
-        window.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            startBouncing();
-        }, { passive: false });
-
-        function startBouncing() {
+        function startBouncing(e) {
+            if (e) e.preventDefault();
+            
             let msg = document.querySelectorAll('.type1');
             msg.forEach(element => {
                 element.style.opacity = 0;
             });
+
             // Start music on first click only
             if (!musicStarted) {
                 musicStarted = true;
-                bgMusic.play().catch(err => console.log('Audio play failed:', err));
+                bgMusic.play().then(() => {
+                    console.log('Music started');
+                }).catch(err => {
+                    console.log('Audio play failed:', err);
+                    document.addEventListener('touchend', () => {
+                        bgMusic.play();
+                    }, { once: true });
+                });
             }
+
             if (currentState === STATE.IDLE) {
                 currentState = STATE.BOUNCING;
                 instructions.style.opacity = 0;
+                
+                // Always random position in right half
+                ball.x = width * 0.5 + Math.random() * (width * 0.4);
+                
                 ball.vx = (Math.random() - 0.5) * 4;
                 ball.vy = -5;
             } else if (currentState === STATE.GROWN) {
@@ -153,25 +179,38 @@
             }
         }
 
+        window.addEventListener('mousedown', startBouncing);
+        window.addEventListener('touchstart', startBouncing, { passive: false });
+
         function reset() {
             currentState = STATE.IDLE;
             ball.r = 15;
+            
+            // Reset to right half
+            ball.x = width * 0.5 + Math.random() * (width * 0.4);
             ball.y = height / 2;
-            ball.x = width / 2;
+            
             ball.vx = 0;
             ball.vy = 0;
             treeGrowth = 0;
-            instructions.innerText = "Click to Drop";
-            instructions.style.opacity = 1;
-
-            // Reset typewriter
+            animationCompleteTriggered = false;
+            
             wordIndex = 0;
             charIndex = 0;
             currentText = "";
             typewriterDiv.textContent = "";
+            
+            wordIndex2 = 0;
+            charIndex2 = 0;
+            currentText2 = "";
+            typewriterDiv2.textContent = "";
+            typewriterDiv2.style.opacity = 0;
+            
             typeWriter();
         }
+
         let animationCompleteTriggered = false;
+
         function update() {
             if (currentState === STATE.BOUNCING) {
                 ball.vy += GRAVITY;
@@ -202,7 +241,7 @@
                 }
             } else if (currentState === STATE.TRANSFORMING) {
                 if (treeGrowth < 1) {
-                    treeGrowth += 0.0008;
+                    treeGrowth += 0.008;
 
                     if (ball.r > 0) {
                         ball.r = 15 * (1 - treeGrowth * 2);
@@ -211,10 +250,7 @@
                 } else {
                     treeGrowth = 1;
                     currentState = STATE.GROWN;
-                    instructions.innerText = "Click to Reset";
-                    instructions.style.opacity = 0.7;
 
-                    // ✅ CALL YOUR FUNCTION HERE (only once)
                     if (!animationCompleteTriggered) {
                         animationCompleteTriggered = true;
                         onAnimationComplete();
@@ -222,6 +258,7 @@
                 }
             }
         }
+
         const words2 = "I don't know how I could ever repay you for everything, but I made this little something to hold a piece of my heart for you. You make my world softer, brighter, and somehow feel like home—every single day. So take this as my quiet promise: I'm yours, in the little moments and the forever ones too.";
 
         let wordIndex2 = 0;
@@ -234,13 +271,12 @@
                 currentText2 += words2[charIndex2];
                 typewriterDiv2.textContent = currentText2;
                 charIndex2++;
-                setTimeout(typeWriter2, 50); // Fixed: was calling typeWriter instead of typeWriter2
+                setTimeout(typeWriter2, 50);
             }
         }
 
-        // Call when animation completes
         function onAnimationComplete() {
-            typewriterDiv2.style.opacity = 1; // fade it in
+            typewriterDiv2.style.opacity = 1;
             typeWriter2();
         }
 
@@ -259,40 +295,14 @@
             ctx.fillStyle = color;
 
             ctx.beginPath();
-
             const w = size;
             const h = size;
 
-            // Start at bottom point
             ctx.moveTo(0, h);
-
-            // Left bump
-            ctx.bezierCurveTo(
-                -w * 0.5, h * 0.5,    // control point 1
-                -w * 0.8, h * 0.2,    // control point 2
-                -w * 0.8, -h * 0.3    // end point (top left)
-            );
-
-            // Left top curve
-            ctx.bezierCurveTo(
-                -w * 0.8, -h * 0.6,   // control point 1
-                -w * 0.4, -h * 0.8,   // control point 2
-                0, -h * 0.6           // end point (middle top)
-            );
-
-            // Right top curve
-            ctx.bezierCurveTo(
-                w * 0.4, -h * 0.8,    // control point 1
-                w * 0.8, -h * 0.6,    // control point 2
-                w * 0.8, -h * 0.3     // end point (top right)
-            );
-
-            // Right bump
-            ctx.bezierCurveTo(
-                w * 0.8, h * 0.2,     // control point 1
-                w * 0.5, h * 0.5,     // control point 2
-                0, h                   // end point (bottom point)
-            );
+            ctx.bezierCurveTo(-w * 0.5, h * 0.5, -w * 0.8, h * 0.2, -w * 0.8, -h * 0.3);
+            ctx.bezierCurveTo(-w * 0.8, -h * 0.6, -w * 0.4, -h * 0.8, 0, -h * 0.6);
+            ctx.bezierCurveTo(w * 0.4, -h * 0.8, w * 0.8, -h * 0.6, w * 0.8, -h * 0.3);
+            ctx.bezierCurveTo(w * 0.8, h * 0.2, w * 0.5, h * 0.5, 0, h);
 
             ctx.fill();
             ctx.restore();
@@ -305,7 +315,6 @@
             ctx.translate(startX, startY);
             ctx.rotate(angle * Math.PI / 180);
 
-            // Brown trunk
             ctx.beginPath();
             ctx.moveTo(0, 0);
             ctx.lineTo(0, -length);
@@ -327,7 +336,6 @@
                     drawTree(0, -length, nextLen, -BRANCH_ANGLE_VAR + wind, nextDepth, nextWidth);
                     drawTree(0, -length, nextLen, BRANCH_ANGLE_VAR + wind, nextDepth, nextWidth);
                 } else if (treeGrowth > 0.5) {
-                    // Draw heart at branch tip
                     let heartScale = Math.min(1, (treeGrowth - 0.5) * 2);
                     ctx.translate(0, -length);
                     const flutter = Math.sin(time * 2 + startX + depth) * 10;
@@ -341,33 +349,34 @@
             ctx.restore();
         }
 
-        function draw() {
-            ctx.clearRect(0, 0, width, height);
+function draw() {
+    ctx.clearRect(0, 0, width, height);
 
-            if (currentState === STATE.IDLE || currentState === STATE.BOUNCING) {
-                ctx.beginPath();
-                ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
-                ctx.fillStyle = ball.color;
-                ctx.shadowBlur = 20;
-                ctx.shadowColor = 'white';
-                ctx.fill();
-                ctx.shadowBlur = 0;
-            } else if (currentState === STATE.TRANSFORMING || currentState === STATE.GROWN) {
-                if (ball.r > 0.5) {
-                    ctx.beginPath();
-                    ctx.arc(treeRootX, height - ball.r, ball.r, 0, Math.PI * 2);
-                    ctx.fillStyle = ball.color;
-                    ctx.fill();
-                }
-
-                const trunkLength = (height * 0.35) * treeGrowth;
-                const trunkWidth = 12 * treeGrowth;
-
-                if (treeGrowth > 0.01) {
-                    drawTree(treeRootX, height, trunkLength, 0, 0, trunkWidth);
-                }
-            }
+    if (currentState === STATE.IDLE || currentState === STATE.BOUNCING) {
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+        ctx.fillStyle = ball.color;
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = 'white';
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    } else if (currentState === STATE.TRANSFORMING || currentState === STATE.GROWN) {
+        if (ball.r > 0.5) {
+            ctx.beginPath();
+            ctx.arc(treeRootX, height - ball.r, ball.r, 0, Math.PI * 2);
+            ctx.fillStyle = ball.color;
+            ctx.fill();
         }
+
+        // Reduce tree height to 40% of viewport
+        const trunkLength = (height * 0.35) * treeGrowth;
+        const trunkWidth = 12 * treeGrowth;
+
+        if (treeGrowth > 0.01) {
+            drawTree(treeRootX, height, trunkLength, 0, 0, trunkWidth);
+        }
+    }
+}
 
         function loop() {
             update();
