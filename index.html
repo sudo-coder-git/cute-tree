@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bouncing Ball to Heart Tree</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: linear-gradient(to bottom, #0a0e27 0%, #1a0033 40%, #4a1a00 70%, #ff6b1a 100%);
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #instructions {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: rgba(255, 255, 255, 0.7);
+            pointer-events: none;
+            transition: all 0.5s;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-size: 14px;
+            text-align: center;
+            display: none;
+        }
+
+        #typewriter {
+            position: absolute;
+            top: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.85);
+            pointer-events: none;
+            text-transform: none;
+            letter-spacing: 1px;
+            font-size: 16px;
+            text-align: center;
+            max-width: 80%;
+            line-height: 1.6;
+        }
+
+        #typewriter2 {
+            position: absolute;
+            top: 80%;
+            left: 30%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 1);
+            pointer-events: none;
+            text-transform: none;
+            letter-spacing: 1px;
+            font-size: 12px;
+            text-align: center;
+            max-width: 50%;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="instructions">Click to Drop</div>
+    <div id="typewriter" class='type1'></div>
+    <div id="typewriter2" class='type2'></div>
+    <audio id="bgMusic" loop>
+        <source src="your-song.m4a" type="audio/mpeg">
+    </audio>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const instructions = document.getElementById('instructions');
+        let musicStarted = false;
+        let width, height;
+
+        const STATE = {
+            IDLE: 0,
+            BOUNCING: 1,
+            TRANSFORMING: 2,
+            GROWN: 3
+        };
+        let currentState = STATE.IDLE;
+
+        const GRAVITY = 0.1;
+        const BOUNCE_DAMPING = 0.7;
+        const FRICTION = 0.99;
+        const STOP_THRESHOLD = 0.5;
+
+        const MAX_BRANCH_LEVEL = 8;  // Reduced for better performance
+        const BRANCH_ANGLE_VAR = 28;
+        const LENGTH_SCALE = 0.68;
+
+        let ball = {
+            x: 0,
+            y: 0,
+            r: 15,
+            vx: 0,
+            vy: 0,
+            color: 'white'
+        };
+
+        let treeGrowth = 0;
+        let treeRootX = 0;
+        let treeRootY = 0;
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+
+            if (currentState === STATE.IDLE) {
+                ball.x = width / 2;
+                ball.y = height / 2;
+            } else if (currentState === STATE.TRANSFORMING || currentState === STATE.GROWN) {
+                treeRootY = height / 2;
+            }
+        }
+
+        window.addEventListener('resize', resize);
+        resize();
+
+        window.addEventListener('mousedown', startBouncing);
+        window.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startBouncing();
+        }, { passive: false });
+
+        function startBouncing() {
+            let msg = document.querySelectorAll('.type1');
+            msg.forEach(element => {
+                element.style.opacity = 0;
+            });
+            // Start music on first click only
+            if (!musicStarted) {
+                musicStarted = true;
+                bgMusic.play().catch(err => console.log('Audio play failed:', err));
+            }
+            if (currentState === STATE.IDLE) {
+                currentState = STATE.BOUNCING;
+                instructions.style.opacity = 0;
+                ball.vx = (Math.random() - 0.5) * 4;
+                ball.vy = -5;
+            } else if (currentState === STATE.GROWN) {
+                reset();
+            }
+        }
+
+        function reset() {
+            currentState = STATE.IDLE;
+            ball.r = 15;
+            ball.y = height / 2;
+            ball.x = width / 2;
+            ball.vx = 0;
+            ball.vy = 0;
+            treeGrowth = 0;
+            instructions.innerText = "Click to Drop";
+            instructions.style.opacity = 1;
+
+            // Reset typewriter
+            wordIndex = 0;
+            charIndex = 0;
+            currentText = "";
+            typewriterDiv.textContent = "";
+            typeWriter();
+        }
+        let animationCompleteTriggered = false;
+        function update() {
+            if (currentState === STATE.BOUNCING) {
+                ball.vy += GRAVITY;
+                ball.vx *= FRICTION;
+                ball.x += ball.vx;
+                ball.y += ball.vy;
+
+                if (ball.y + ball.r > height) {
+                    ball.y = height - ball.r;
+                    ball.vy *= -BOUNCE_DAMPING;
+
+                    if (Math.abs(ball.vy) < STOP_THRESHOLD) {
+                        ball.vy = 0;
+                        ball.vx = 0;
+                        currentState = STATE.TRANSFORMING;
+                        treeRootX = ball.x;
+                        treeRootY = height;
+                    }
+                }
+
+                if (ball.x - ball.r < 0) {
+                    ball.x = ball.r;
+                    ball.vx *= -1;
+                }
+                if (ball.x + ball.r > width) {
+                    ball.x = width - ball.r;
+                    ball.vx *= -1;
+                }
+            } else if (currentState === STATE.TRANSFORMING) {
+                if (treeGrowth < 1) {
+                    treeGrowth += 0.0008;
+
+                    if (ball.r > 0) {
+                        ball.r = 15 * (1 - treeGrowth * 2);
+                        if (ball.r < 0) ball.r = 0;
+                    }
+                } else {
+                    treeGrowth = 1;
+                    currentState = STATE.GROWN;
+                    instructions.innerText = "Click to Reset";
+                    instructions.style.opacity = 0.7;
+
+                    // ✅ CALL YOUR FUNCTION HERE (only once)
+                    if (!animationCompleteTriggered) {
+                        animationCompleteTriggered = true;
+                        onAnimationComplete();
+                    }
+                }
+            }
+        }
+        const words2 = "I don't know how I could ever repay you for everything, but I made this little something to hold a piece of my heart for you. You make my world softer, brighter, and somehow feel like home—every single day. So take this as my quiet promise: I'm yours, in the little moments and the forever ones too.";
+
+        let wordIndex2 = 0;
+        let charIndex2 = 0;
+        let currentText2 = "";
+        const typewriterDiv2 = document.getElementById('typewriter2');
+
+        function typeWriter2() {
+            if (charIndex2 < words2.length) {
+                currentText2 += words2[charIndex2];
+                typewriterDiv2.textContent = currentText2;
+                charIndex2++;
+                setTimeout(typeWriter2, 50); // Fixed: was calling typeWriter instead of typeWriter2
+            }
+        }
+
+        // Call when animation completes
+        function onAnimationComplete() {
+            typewriterDiv2.style.opacity = 1; // fade it in
+            typeWriter2();
+        }
+
+        const colors = [
+            '#ff3366', '#ff1744', '#ff4081', '#f50057', '#e91e63',
+            '#c2185b', '#ec407a', '#f06292', '#ff5983', '#ff6b9d', '#ff8fab'
+        ];
+
+        function getRandomColor() {
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+
+        function drawHeart(ctx, x, y, size, color) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.fillStyle = color;
+
+            ctx.beginPath();
+
+            const w = size;
+            const h = size;
+
+            // Start at bottom point
+            ctx.moveTo(0, h);
+
+            // Left bump
+            ctx.bezierCurveTo(
+                -w * 0.5, h * 0.5,    // control point 1
+                -w * 0.8, h * 0.2,    // control point 2
+                -w * 0.8, -h * 0.3    // end point (top left)
+            );
+
+            // Left top curve
+            ctx.bezierCurveTo(
+                -w * 0.8, -h * 0.6,   // control point 1
+                -w * 0.4, -h * 0.8,   // control point 2
+                0, -h * 0.6           // end point (middle top)
+            );
+
+            // Right top curve
+            ctx.bezierCurveTo(
+                w * 0.4, -h * 0.8,    // control point 1
+                w * 0.8, -h * 0.6,    // control point 2
+                w * 0.8, -h * 0.3     // end point (top right)
+            );
+
+            // Right bump
+            ctx.bezierCurveTo(
+                w * 0.8, h * 0.2,     // control point 1
+                w * 0.5, h * 0.5,     // control point 2
+                0, h                   // end point (bottom point)
+            );
+
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function drawTree(startX, startY, length, angle, depth, branchWidth) {
+            if (depth > MAX_BRANCH_LEVEL) return;
+
+            ctx.save();
+            ctx.translate(startX, startY);
+            ctx.rotate(angle * Math.PI / 180);
+
+            // Brown trunk
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(0, -length);
+            ctx.strokeStyle = depth < 3 ? '#5d4037' : '#8d6e63';
+            ctx.lineWidth = branchWidth;
+            ctx.stroke();
+
+            const currentMaxDepth = treeGrowth * (MAX_BRANCH_LEVEL + 2);
+
+            if (depth < currentMaxDepth) {
+                const time = Date.now() * 0.001;
+                const wind = Math.sin(time + depth * 0.5) * 2;
+
+                const nextLen = length * LENGTH_SCALE;
+                const nextWidth = branchWidth * 0.7;
+                const nextDepth = depth + 1;
+
+                if (nextDepth < MAX_BRANCH_LEVEL) {
+                    drawTree(0, -length, nextLen, -BRANCH_ANGLE_VAR + wind, nextDepth, nextWidth);
+                    drawTree(0, -length, nextLen, BRANCH_ANGLE_VAR + wind, nextDepth, nextWidth);
+                } else if (treeGrowth > 0.5) {
+                    // Draw heart at branch tip
+                    let heartScale = Math.min(1, (treeGrowth - 0.5) * 2);
+                    ctx.translate(0, -length);
+                    const flutter = Math.sin(time * 2 + startX + depth) * 10;
+                    ctx.rotate(flutter * Math.PI / 180);
+
+                    const heartColor = colors[Math.floor((startX + depth) * 123) % colors.length];
+                    drawHeart(ctx, 0, 0, 8 * heartScale, heartColor);
+                }
+            }
+
+            ctx.restore();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, width, height);
+
+            if (currentState === STATE.IDLE || currentState === STATE.BOUNCING) {
+                ctx.beginPath();
+                ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+                ctx.fillStyle = ball.color;
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = 'white';
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            } else if (currentState === STATE.TRANSFORMING || currentState === STATE.GROWN) {
+                if (ball.r > 0.5) {
+                    ctx.beginPath();
+                    ctx.arc(treeRootX, height - ball.r, ball.r, 0, Math.PI * 2);
+                    ctx.fillStyle = ball.color;
+                    ctx.fill();
+                }
+
+                const trunkLength = (height * 0.35) * treeGrowth;
+                const trunkWidth = 12 * treeGrowth;
+
+                if (treeGrowth > 0.01) {
+                    drawTree(treeRootX, height, trunkLength, 0, 0, trunkWidth);
+                }
+            }
+        }
+
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        loop();
+
+        const words = "I don't know how I can ever repay you for everything, but here is a little something.....";
+        let wordIndex = 0;
+        let charIndex = 0;
+        let currentText = "";
+        const typewriterDiv = document.getElementById('typewriter');
+
+        function typeWriter() {
+            if (charIndex < words.length) {
+                currentText += words[charIndex];
+                typewriterDiv.textContent = currentText;
+                charIndex++;
+                setTimeout(typeWriter, 50);
+            }
+        }
+
+        typeWriter();
+    </script>
+</body>
+
+</html>
